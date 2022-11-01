@@ -6,6 +6,8 @@ import { useSocket } from "./useSocket";
 
 // const myPeerConnection = new RTCPeerConnection();
 
+// 먼저 들어온 사람이 나갔다가 들어오거나 새로고침 하는 경우에 에러발생 -> setLocalDescription에러
+
 const urls = [
   "stun:stun.l.google.com:19302",
   "stun:stun1.l.google.com:19302",
@@ -31,16 +33,18 @@ export const useWebRTC = (otherUserVideoRef: React.RefObject<HTMLVideoElement>) 
 
   const offerCallback = useCallback(async (offer: RTCSessionDescriptionInit) => {
     console.log("offerCallback");
-    myPeerConnection.current.setRemoteDescription(offer);
+    await myPeerConnection.current.setRemoteDescription(offer);
     const answer = await myPeerConnection.current.createAnswer();
     myPeerConnection.current.setLocalDescription(answer);
+    console.log("remoteDescription : ", myPeerConnection.current.remoteDescription);
     socket.emit("answer", answer, roomIdx);
   }, []);
 
-  const answerCallback = useCallback((answer: RTCSessionDescriptionInit) => {
+  const answerCallback = useCallback(async (answer: RTCSessionDescriptionInit) => {
     console.log("answerCallback");
     console.log(answer);
-    myPeerConnection.current.setRemoteDescription(answer);
+    await myPeerConnection.current.setRemoteDescription(answer);
+    console.log("remoteDescription : ", myPeerConnection.current.remoteDescription);
   }, []);
 
   const iceCallback = useCallback((ice: RTCIceCandidateInit) => {
@@ -75,6 +79,7 @@ export const useWebRTC = (otherUserVideoRef: React.RefObject<HTMLVideoElement>) 
   }, [myStream, isFirst]);
 
   useEffect(() => {
+    console.log("useEffect start");
     socket.emit("join_room", roomIdx);
     socket.on("welcome", welcomeCallback);
     socket.on("offer", offerCallback);
