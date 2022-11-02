@@ -6,16 +6,18 @@ import { useWebRTC } from "Hooks/useWebRTC";
 import { useMyStream } from "Hooks/useMyStream";
 import { useDisconnectSocket } from "Hooks/useDisconnectSocket";
 import CameraSelector from "components/cameraSelector";
+import PeerVideo from "components/peerVideo";
 
 const Room = () => {
-  const otherUserVideoRef = useRef<HTMLVideoElement>(null);
+  const usersStream = useWebRTC();
   useMyStream();
-  useWebRTC(otherUserVideoRef);
   useDisconnectSocket();
   return (
     <>
       <Video />
-      <video ref={otherUserVideoRef} width="400" height="400" autoPlay playsInline />
+      {usersStream.map((data, idx) => (
+        <PeerVideo stream={data.stream} key={idx} />
+      ))}
       <CameraSelector />
       <MuteBtn />
       <CameraBtn />

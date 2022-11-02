@@ -14,24 +14,24 @@ const httpServer = http.createServer(app);
 const wsServer = SocketIO(httpServer);
 
 wsServer.on("connection", (socket) => {
+  const socketID = socket.id;
   socket.on("join_room", (roomName) => {
     socket.join(roomName);
-    console.log("join");
-    socket.to(roomName).emit("welcome");
+    socket.to(roomName).emit("welcome", socketID);
   });
   socket.on("offer", (offer, roomName) => {
-    socket.to(roomName).emit("offer", offer);
+    socket.to(roomName).emit("offer", offer, socketID);
   });
   socket.on("answer", (answer, roomName) => {
-    socket.to(roomName).emit("answer", answer);
+    socket.to(roomName).emit("answer", answer, socketID);
   });
   socket.on("ice", (ice, roomName) => {
-    socket.to(roomName).emit("ice", ice);
+    socket.to(roomName).emit("ice", ice, socketID);
   });
   socket.on("leave_room", (roomName) => {
     socket.leave(roomName);
     console.log("leave");
-    socket.to(roomName).emit("leave");
+    socket.to(roomName).emit("leave", socketID);
   });
 });
 

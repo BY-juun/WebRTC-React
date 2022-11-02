@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useRecoilValue } from "recoil";
 import { MyStream } from "store";
@@ -16,78 +16,83 @@ const urls = [
   "stun:stun4.l.google.com:19302",
 ];
 
-export const useWebRTC = (otherUserVideoRef: React.RefObject<HTMLVideoElement>) => {
+export const useWebRTC = () => {
   const { roomIdx } = useParams();
-
+  const [users, setUsers] = useState<any[]>([]);
   const [socket, _] = useSocket();
-  const myPeerConnection = useRef<RTCPeerConnection>(new RTCPeerConnection({ iceServers: [{ urls }] }));
-  const [isFirst, setIsFirst] = useState(true);
+  const peerConnections = useRef<{ [key: string]: RTCPeerConnection }>({});
   const myStream = useRecoilValue(MyStream);
 
-  const welcomeCallback = useCallback(async () => {
+  const createPeerConnection = (socketID: string) => {
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls }] });
+      myStream?.getTracks().forEach((track) => pc.addTrack(track, myStream));
+      pc.addEventListener("icecandidate", handleIce);
+      pc.addEventListener("addstream", (e) => handleAddStream(e, socketID));
+      return pc;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  };
+
+  const welcomeCallback = async (socketID: string) => {
     console.log("welcomeCallback");
-    const offer = await myPeerConnection.current.createOffer();
-    myPeerConnection.current.setLocalDescription(offer);
+    const pc = createPeerConnection(socketID);
+    if (!pc) return;
+    const offer = await pc.createOffer();
+    pc.setLocalDescription(offer);
+    peerConnections.current[socketID] = pc;
     socket.emit("offer", offer, roomIdx);
-  }, []);
+  };
 
-  const offerCallback = useCallback(async (offer: RTCSessionDescriptionInit) => {
+  const offerCallback = async (offer: RTCSessionDescriptionInit, socketID: string) => {
     console.log("offerCallback");
-    await myPeerConnection.current.setRemoteDescription(offer);
-    const answer = await myPeerConnection.current.createAnswer();
-    myPeerConnection.current.setLocalDescription(answer);
-    console.log("remoteDescription : ", myPeerConnection.current.remoteDescription);
+    const pc = createPeerConnection(socketID);
+    if (!pc) return;
+    pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    pc.setLocalDescription(answer);
+    peerConnections.current[socketID] = pc;
     socket.emit("answer", answer, roomIdx);
-  }, []);
+  };
 
-  const answerCallback = useCallback(async (answer: RTCSessionDescriptionInit) => {
+  const answerCallback = async (answer: RTCSessionDescriptionInit, socketID: string) => {
     console.log("answerCallback");
-    console.log(answer);
-    await myPeerConnection.current.setRemoteDescription(answer);
-    console.log("remoteDescription : ", myPeerConnection.current.remoteDescription);
-  }, []);
+    peerConnections.current[socketID].setRemoteDescription(answer);
+  };
 
-  const iceCallback = useCallback((ice: RTCIceCandidateInit) => {
+  const iceCallback = (ice: RTCIceCandidateInit, socketID: string) => {
     console.log("iceCallback");
-    myPeerConnection.current.addIceCandidate(ice);
-  }, []);
+    peerConnections.current[socketID].addIceCandidate(ice);
+  };
 
-  const handleIce = useCallback((data: any) => {
+  const handleIce = (data: any) => {
     console.log("handleIce");
     socket.emit("ice", data.candidate, roomIdx);
-  }, []);
+  };
 
-  const handleAddStream = useCallback((data: any) => {
+  const handleAddStream = (data: any, socketID: string) => {
     console.log("handleAddStream");
-    if (!otherUserVideoRef.current) return;
-    otherUserVideoRef.current.srcObject = data.stream;
-  }, []);
+    console.log("socketID : ", socketID);
+    setUsers((prev) => [...prev, { stream: data.stream, socketID }]);
+  };
 
-  const leaveCallback = useCallback(() => {
+  const leaveCallback = (socketID: string) => {
     console.log("leaveCallback");
-    if (!otherUserVideoRef.current) return;
-    otherUserVideoRef.current.srcObject = null;
-    //myPeerConnection.current = new RTCPeerConnection({ iceServers: [{ urls }] });
-  }, []);
+    peerConnections.current[socketID].close();
+    delete peerConnections.current[socketID];
+    setUsers((prev) => prev.filter((data) => data.socketID !== socketID));
+  };
 
   useEffect(() => {
-    if (myStream && isFirst) {
-      console.log(myPeerConnection);
-      myStream.getTracks().forEach((track) => myPeerConnection.current.addTrack(track, myStream));
-      setIsFirst(false);
-    }
-  }, [myStream, isFirst]);
-
-  useEffect(() => {
-    console.log("useEffect start");
+    if (!myStream) return;
     socket.emit("join_room", roomIdx);
     socket.on("welcome", welcomeCallback);
     socket.on("offer", offerCallback);
     socket.on("answer", answerCallback);
     socket.on("ice", iceCallback);
     socket.on("leave", leaveCallback);
-    myPeerConnection.current.addEventListener("icecandidate", handleIce);
-    myPeerConnection.current.addEventListener("addstream", handleAddStream);
     return () => {
       socket.emit("leave_room", roomIdx);
       socket.off("welcome", welcomeCallback);
@@ -95,9 +100,11 @@ export const useWebRTC = (otherUserVideoRef: React.RefObject<HTMLVideoElement>) 
       socket.off("answer", answerCallback);
       socket.off("ice", iceCallback);
       socket.off("leave", leaveCallback);
-      myPeerConnection.current.removeEventListener("icecandidate", handleIce);
-      myPeerConnection.current.removeEventListener("addstream", handleAddStream);
-      myPeerConnection.current.close();
+      Object.keys(peerConnections.current).forEach((key) => {
+        peerConnections.current[key].close();
+      });
     };
-  }, []);
+  }, [myStream]);
+
+  return users;
 };
