@@ -16,21 +16,21 @@ const wsServer = SocketIO(httpServer);
 wsServer.on("connection", (socket) => {
   const socketID = socket.id;
   socket.on("join_room", (roomName) => {
+    console.log(socketID);
     socket.join(roomName);
     socket.to(roomName).emit("welcome", socketID);
   });
-  socket.on("offer", (offer, roomName) => {
-    socket.to(roomName).emit("offer", offer, socketID);
+  socket.on("offer", (offer, targetSocketID) => {
+    socket.to(targetSocketID).emit("offer", offer, socketID);
   });
-  socket.on("answer", (answer, roomName) => {
-    socket.to(roomName).emit("answer", answer, socketID);
+  socket.on("answer", (answer, targetSocketID) => {
+    socket.to(targetSocketID).emit("answer", answer, socketID);
   });
-  socket.on("ice", (ice, roomName) => {
-    socket.to(roomName).emit("ice", ice, socketID);
+  socket.on("ice", (ice, targetSocketID) => {
+    socket.to(targetSocketID).emit("ice", ice, socketID);
   });
   socket.on("leave_room", (roomName) => {
     socket.leave(roomName);
-    console.log("leave");
     socket.to(roomName).emit("leave", socketID);
   });
 });

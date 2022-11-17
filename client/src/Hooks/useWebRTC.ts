@@ -27,7 +27,7 @@ export const useWebRTC = () => {
     try {
       const pc = new RTCPeerConnection({ iceServers: [{ urls }] });
       myStream?.getTracks().forEach((track) => pc.addTrack(track, myStream));
-      pc.addEventListener("icecandidate", handleIce);
+      pc.addEventListener("icecandidate", (e) => handleIce(e, socketID));
       pc.addEventListener("addstream", (e) => handleAddStream(e, socketID));
       return pc;
     } catch (e) {
@@ -37,49 +37,41 @@ export const useWebRTC = () => {
   };
 
   const welcomeCallback = async (socketID: string) => {
-    console.log("welcomeCallback");
     const pc = createPeerConnection(socketID);
     if (!pc) return;
     const offer = await pc.createOffer();
     pc.setLocalDescription(offer);
     peerConnections.current[socketID] = pc;
-    socket.emit("offer", offer, roomIdx);
+    socket.emit("offer", offer, socketID);
   };
 
   const offerCallback = async (offer: RTCSessionDescriptionInit, socketID: string) => {
-    console.log("offerCallback");
     const pc = createPeerConnection(socketID);
     if (!pc) return;
     pc.setRemoteDescription(offer);
     const answer = await pc.createAnswer();
     pc.setLocalDescription(answer);
     peerConnections.current[socketID] = pc;
-    socket.emit("answer", answer, roomIdx);
+    socket.emit("answer", answer, socketID);
   };
 
   const answerCallback = async (answer: RTCSessionDescriptionInit, socketID: string) => {
-    console.log("answerCallback");
     peerConnections.current[socketID].setRemoteDescription(answer);
   };
 
   const iceCallback = (ice: RTCIceCandidateInit, socketID: string) => {
-    console.log("iceCallback");
-    peerConnections.current[socketID].addIceCandidate(ice);
+    peerConnections.current[socketID]?.addIceCandidate(ice);
   };
 
-  const handleIce = (data: any) => {
-    console.log("handleIce");
-    socket.emit("ice", data.candidate, roomIdx);
+  const handleIce = (data: any, socketID: string) => {
+    socket.emit("ice", data.candidate, socketID);
   };
 
   const handleAddStream = (data: any, socketID: string) => {
-    console.log("handleAddStream");
-    console.log("socketID : ", socketID);
     setUsers((prev) => [...prev, { stream: data.stream, socketID }]);
   };
 
   const leaveCallback = (socketID: string) => {
-    console.log("leaveCallback");
     peerConnections.current[socketID].close();
     delete peerConnections.current[socketID];
     setUsers((prev) => prev.filter((data) => data.socketID !== socketID));
@@ -94,6 +86,8 @@ export const useWebRTC = () => {
     socket.on("ice", iceCallback);
     socket.on("leave", leaveCallback);
     return () => {
+      setUsers([]);
+      peerConnections.current = {};
       socket.emit("leave_room", roomIdx);
       socket.off("welcome", welcomeCallback);
       socket.off("offer", offerCallback);

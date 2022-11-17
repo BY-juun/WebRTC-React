@@ -5,11 +5,12 @@ import { MyStream } from "store";
 const CameraSelector = () => {
   const [cameraList, setCameraList] = useState<MediaDeviceInfo[] | null>(null);
   const setMyStream = useSetRecoilState(MyStream);
-  const setOptions = useCallback(async () => {
+
+  const setOptions = async () => {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter((device) => device.kind === "videoinput");
     setCameraList(cameras);
-  }, []);
+  };
 
   useEffect(() => {
     setOptions();
