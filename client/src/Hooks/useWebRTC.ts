@@ -79,6 +79,7 @@ export const useWebRTC = () => {
 
   useEffect(() => {
     if (!myStream) return;
+    console.log("mount");
     socket.emit("join_room", roomIdx);
     socket.on("welcome", welcomeCallback);
     socket.on("offer", offerCallback);
@@ -88,6 +89,8 @@ export const useWebRTC = () => {
     return () => {
       setUsers([]);
       peerConnections.current = {};
+      console.log("unMount");
+      console.log(roomIdx);
       socket.emit("leave_room", roomIdx);
       socket.off("welcome", welcomeCallback);
       socket.off("offer", offerCallback);

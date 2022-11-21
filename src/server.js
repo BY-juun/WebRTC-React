@@ -13,11 +13,16 @@ app.get("/*", (_, res) => res.redirect("/"));
 const httpServer = http.createServer(app);
 const wsServer = SocketIO(httpServer);
 
+const room = {};
+
 wsServer.on("connection", (socket) => {
   const socketID = socket.id;
+
   socket.on("join_room", (roomName) => {
-    console.log(socketID);
     socket.join(roomName);
+    if (!room[roomName]) room[roomName] = [socketID];
+    else room[roomName].push(socketID);
+
     socket.to(roomName).emit("welcome", socketID);
   });
   socket.on("offer", (offer, targetSocketID) => {
@@ -29,11 +34,14 @@ wsServer.on("connection", (socket) => {
   socket.on("ice", (ice, targetSocketID) => {
     socket.to(targetSocketID).emit("ice", ice, socketID);
   });
-  socket.on("leave_room", (roomName) => {
-    socket.leave(roomName);
-    socket.to(roomName).emit("leave", socketID);
+
+  socket.on("disconnect", () => {
+    const targetRoomName = Object.keys(room).find((key) => room[key].includes(socketID));
+    room[targetRoomName] = room[targetRoomName].filter((userSocketID) => userSocketID !== socketID);
+    socket.to(targetRoomName).emit("leave", socketID);
+    console.log("disconnect!", targetRoomName, socketID);
   });
 });
 
-const handleListen = () => console.log(`Listening on http://localhost:3000`);
-httpServer.listen(3000, handleListen);
+const handleListen = () => console.log(`Listening on http://localhost:3003`);
+httpServer.listen(3003, handleListen);
